@@ -1,0 +1,144 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="Track personal travel records and flight statistics. Log longest flights, most-visited airports, favourite routes, and CO₂ emissions.">
+    <title>FLTRCKR: Flight Log & Records</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
+        body {
+            font-family: 'Inter', sans-serif;
+        }
+        .gradient-bg {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        }
+        .screenshot-container {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 2rem;
+            margin: 3rem 0;
+        }
+        .screenshot-container img {
+            border-radius: 1rem;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.15);
+            transition: transform 0.3s ease;
+        }
+        .screenshot-container img:hover {
+            transform: scale(1.05);
+        }
+    </style>
+</head>
+<body class="bg-gray-50">
+    <!-- Header -->
+    <header class="gradient-bg text-white">
+        <div class="max-w-6xl mx-auto px-6 py-16 text-center">
+            <img src="images/icon.png" alt="FLTRCKR Icon" class="w-32 h-32 mx-auto mb-6 rounded-3xl shadow-2xl">
+            <h1 class="text-5xl font-bold mb-4">FLTRCKR</h1>
+            <p class="text-2xl font-light mb-8">Flight Log & Records</p>
+            <a href="https://play.google.com/store/apps/details?id=com.fltrckr.app"
+               target="_blank"
+               class="inline-flex items-center bg-white text-purple-700 px-8 py-4 rounded-full font-semibold text-lg shadow-lg hover:shadow-xl transition-all hover:scale-105">
+                <svg class="w-6 h-6 mr-2" fill="currentColor" viewBox="0 0 24 24">
+                    <path d="M3 20.5v-17c0-.59.34-1.11.84-1.35L13.69 12l-9.85 9.85c-.5-.24-.84-.76-.84-1.35zm13.81-5.67L6.16 21.34l11.09-6.43-1.44-1.58zm1.3-1.45l2.55-1.48c.55-.32.55-1.02 0-1.34l-2.55-1.48-1.47 1.62 1.47 1.68zm-1.3-5.36L6.16 2.66l10.65 6.51 1.44-1.58z"/>
+                </svg>
+                Get it on Google Play
+            </a>
+        </div>
+    </header>
+
+    <!-- About Section -->
+    <section class="max-w-6xl mx-auto px-6 py-16">
+        <h2 class="text-3xl font-bold text-gray-800 mb-6">About this app</h2>
+        <p class="text-lg text-gray-700 leading-relaxed mb-4">
+            Track personal travel records and flight statistics. Log longest flights, most-visited airports, favourite routes, and CO₂ emissions.
+        </p>
+        <p class="text-lg text-gray-700 leading-relaxed mb-4">
+            Add flights easily: scan boarding pass barcodes, use natural language ('yesterday's Ryanair flight'), or enter manually.
+        </p>
+        <p class="text-lg text-gray-700 leading-relaxed mb-4">
+            Add custom airports and aircraft types, including private piston and jet aircraft, to track your flights as a pilot or passenger from any location.
+        </p>
+        <p class="text-lg text-gray-700 leading-relaxed mb-4">
+            Add coverage beyond commercial aviation with custom aircraft and airport data for complete flight logging flexibility.
+        </p>
+        <p class="text-lg text-gray-700 leading-relaxed font-semibold">
+            Works offline.
+        </p>
+    </section>
+
+    <!-- Screenshots Section -->
+    <section class="max-w-6xl mx-auto px-6 py-16 bg-white">
+        <h2 class="text-3xl font-bold text-gray-800 mb-8 text-center">Screenshots</h2>
+        <div class="screenshot-container">
+            <img src="images/Frame 1.png" alt="FLTRCKR Screenshot 1" loading="lazy">
+            <img src="images/Frame 2.png" alt="FLTRCKR Screenshot 2" loading="lazy">
+            <img src="images/Frame 3.png" alt="FLTRCKR Screenshot 3" loading="lazy">
+            <img src="images/Frame 4.png" alt="FLTRCKR Screenshot 4" loading="lazy">
+        </div>
+    </section>
+
+    <!-- Features Section -->
+    <section class="max-w-6xl mx-auto px-6 py-16">
+        <h2 class="text-3xl font-bold text-gray-800 mb-8 text-center">Features</h2>
+        <div class="grid md:grid-cols-2 gap-6">
+            <div class="bg-white p-6 rounded-lg shadow-md">
+                <h3 class="text-xl font-semibold text-gray-800 mb-3">🗺️ Interactive Map</h3>
+                <p class="text-gray-700">View all your destinations on an interactive map</p>
+            </div>
+            <div class="bg-white p-6 rounded-lg shadow-md">
+                <h3 class="text-xl font-semibold text-gray-800 mb-3">📊 Flight Statistics</h3>
+                <p class="text-gray-700">Track distance, hours, countries visited, and personal records</p>
+            </div>
+            <div class="bg-white p-6 rounded-lg shadow-md">
+                <h3 class="text-xl font-semibold text-gray-800 mb-3">🌱 CO₂ Emissions</h3>
+                <p class="text-gray-700">Calculate your carbon footprint from flights</p>
+            </div>
+            <div class="bg-white p-6 rounded-lg shadow-md">
+                <h3 class="text-xl font-semibold text-gray-800 mb-3">🤖 AI-Powered Search</h3>
+                <p class="text-gray-700">Find past trips using natural language</p>
+            </div>
+            <div class="bg-white p-6 rounded-lg shadow-md">
+                <h3 class="text-xl font-semibold text-gray-800 mb-3">⏱️ Flight Countdown</h3>
+                <p class="text-gray-700">Keep track of upcoming flights</p>
+            </div>
+            <div class="bg-white p-6 rounded-lg shadow-md">
+                <h3 class="text-xl font-semibold text-gray-800 mb-3">✈️ Custom Data</h3>
+                <p class="text-gray-700">Add custom airports, locations and aircraft types</p>
+            </div>
+            <div class="bg-white p-6 rounded-lg shadow-md">
+                <h3 class="text-xl font-semibold text-gray-800 mb-3">📤 Export & Share</h3>
+                <p class="text-gray-700">Export and share your flight data</p>
+            </div>
+            <div class="bg-white p-6 rounded-lg shadow-md">
+                <h3 class="text-xl font-semibold text-gray-800 mb-3">📱 Offline Support</h3>
+                <p class="text-gray-700">Works without internet connection</p>
+            </div>
+        </div>
+    </section>
+
+    <!-- CTA Section -->
+    <section class="gradient-bg text-white py-16">
+        <div class="max-w-4xl mx-auto px-6 text-center">
+            <h2 class="text-3xl font-bold mb-6">Start tracking your flights today</h2>
+            <a href="https://play.google.com/store/apps/details?id=com.fltrckr.app"
+               target="_blank"
+               class="inline-flex items-center bg-white text-purple-700 px-8 py-4 rounded-full font-semibold text-lg shadow-lg hover:shadow-xl transition-all hover:scale-105">
+                <svg class="w-6 h-6 mr-2" fill="currentColor" viewBox="0 0 24 24">
+                    <path d="M3 20.5v-17c0-.59.34-1.11.84-1.35L13.69 12l-9.85 9.85c-.5-.24-.84-.76-.84-1.35zm13.81-5.67L6.16 21.34l11.09-6.43-1.44-1.58zm1.3-1.45l2.55-1.48c.55-.32.55-1.02 0-1.34l-2.55-1.48-1.47 1.62 1.47 1.68zm-1.3-5.36L6.16 2.66l10.65 6.51 1.44-1.58z"/>
+                </svg>
+                Download Now
+            </a>
+        </div>
+    </section>
+
+    <!-- Footer -->
+    <footer class="bg-gray-800 text-gray-300 py-8">
+        <div class="max-w-6xl mx-auto px-6 text-center">
+            <p>&copy; 2026 FLTRCKR. All rights reserved.</p>
+            <p class="mt-2 text-sm">Track your flights, preserve your memories.</p>
+        </div>
+    </footer>
+</body>
+</html>
