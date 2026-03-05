@@ -26,10 +26,6 @@ FLTRCKR is a flight tracking app that helps you:
 
 [<img src="https://play.google.com/intl/en_us/badges/static/images/badges/en_badge_web_generic.png" alt="Get it on Google Play" height="80">](https://play.google.com/store/apps/details?id=com.fltrckr.app)
 
-## Website
-
-Visit our landing page at: https://me-eujene.github.io/FLTRCKR-PUBLIC/
-
 ## Screenshots
 <img width="108" height="240" alt="Screenshot_20260213-114250" src="https://github.com/user-attachments/assets/0e16562e-e521-4496-9530-f54d67e0e147" />
 <img width="108" height="240" alt="Screenshot_20260213-114227" src="https://github.com/user-attachments/assets/5a23b00c-9797-4e48-b59d-e589126ed511" />
