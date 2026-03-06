@@ -1,0 +1,768 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>FLTRCK AI Pipeline Eval</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: monospace; background: #111; color: #ccc; padding: 16px; }
+  h1 { color: #f90; margin-bottom: 16px; font-size: 18px; }
+  .controls { display: flex; gap: 8px; align-items: center; margin-bottom: 16px; flex-wrap: wrap; }
+  button { background: #f90; color: #000; border: none; padding: 8px 16px; cursor: pointer; font-family: monospace; font-weight: bold; }
+  button:disabled { background: #555; color: #888; cursor: not-allowed; }
+  button.secondary { background: #374151; color: #ccc; }
+  input[type="text"] { background: #1f2937; border: 1px solid #374151; color: #ccc; padding: 8px; font-family: monospace; width: 320px; }
+  label { color: #9ca3af; font-size: 13px; }
+  .status-bar { background: #1f2937; border: 1px solid #374151; padding: 8px 12px; margin-bottom: 16px; font-size: 13px; color: #9ca3af; }
+  .status-bar span { color: #f90; }
+  table { width: 100%; border-collapse: collapse; font-size: 12px; }
+  th { background: #1f2937; color: #9ca3af; padding: 6px 8px; text-align: left; border-bottom: 1px solid #374151; position: sticky; top: 0; }
+  td { padding: 5px 8px; border-bottom: 1px solid #1f2937; vertical-align: top; }
+  tr:hover td { background: #1a2030; }
+  .pass { color: #4ade80; }
+  .fail { color: #f87171; }
+  .skip { color: #6b7280; }
+  .pending { color: #6b7280; }
+  .running { color: #fbbf24; }
+  .field-result { display: flex; gap: 4px; align-items: baseline; }
+  .expected { color: #6b7280; font-size: 11px; }
+  .got { font-size: 12px; }
+  .score-cell { font-weight: bold; font-size: 14px; }
+  .summary { display: flex; gap: 24px; margin-bottom: 16px; }
+  .summary-item { background: #1f2937; padding: 12px 20px; }
+  .summary-item .num { font-size: 28px; font-weight: bold; }
+  .summary-item .lbl { color: #6b7280; font-size: 12px; }
+  .error-text { color: #f87171; font-size: 11px; max-width: 200px; word-break: break-word; }
+  .row-running td { background: #1a1a00; }
+  .progress-bar { width: 100%; height: 4px; background: #1f2937; margin-bottom: 16px; }
+  .progress-fill { height: 100%; background: #f90; transition: width 0.3s; }
+  select { background: #1f2937; border: 1px solid #374151; color: #ccc; padding: 8px; font-family: monospace; }
+  .trace-row { display: none; }
+  .trace-row.open { display: table-row; }
+  .trace-row td { background: #0d1117; padding: 10px 12px; border-bottom: 2px solid #374151; }
+  .trace-wrap { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 10px; }
+  .trace-block { font-size: 11px; line-height: 1.5; }
+  .trace-block .trace-label { color: #f90; font-weight: bold; margin-bottom: 4px; font-size: 10px; text-transform: uppercase; letter-spacing: 1px; }
+  .trace-block pre { white-space: pre-wrap; word-break: break-word; color: #9ca3af; margin: 0; }
+  .toggle-btn { cursor: pointer; color: #6b7280; font-size: 11px; user-select: none; }
+  .toggle-btn:hover { color: #ccc; }
+  tr.data-row:hover td { background: #1a2030; }
+</style>
+</head>
+<body>
+
+<h1>FLTRCK AI Pipeline Eval</h1>
+
+<div class="controls">
+  <div>
+    <label>Pollinations API Key</label><br>
+    <input type="text" id="apiKey" placeholder="Enter API key..." />
+  </div>
+  <div>
+    <label>Run</label><br>
+    <select id="runMode">
+      <option value="all">All entries</option>
+      <option value="first5">First 5</option>
+      <option value="first10">First 10</option>
+      <option value="single">Single (by index)</option>
+    </select>
+  </div>
+  <div id="singleIndexWrap" style="display:none">
+    <label>Index (0-based)</label><br>
+    <input type="text" id="singleIndex" value="0" style="width:60px" />
+  </div>
+  <div>
+    <label>Query format</label><br>
+    <select id="queryMode">
+      <option value="no-airline">Route only (no airline)</option>
+      <option value="with-airline">With airline name</option>
+    </select>
+  </div>
+  <div>
+    <label>Dataset CSV</label><br>
+    <input type="file" id="csvFile" accept=".csv" style="color:#ccc;font-family:monospace;font-size:13px" />
+  </div>
+  <div style="align-self:flex-end">
+    <button id="runBtn" onclick="runEval()" disabled>Run Eval</button>
+    <button class="secondary" onclick="stopEval()" id="stopBtn" disabled>Stop</button>
+    <button class="secondary" onclick="exportResults()">Export JSON</button>
+  </div>
+</div>
+
+<div class="progress-bar"><div class="progress-fill" id="progressFill" style="width:0%"></div></div>
+
+<div class="status-bar" id="statusBar">Load a CSV dataset to begin.</div>
+
+<div class="summary" id="summary" style="display:none">
+  <div class="summary-item"><div class="num pass" id="sumPass">0</div><div class="lbl">Passed</div></div>
+  <div class="summary-item"><div class="num fail" id="sumFail">0</div><div class="lbl">Failed</div></div>
+  <div class="summary-item"><div class="num" id="sumScore" style="color:#f90">-</div><div class="lbl">Avg Score</div></div>
+  <div class="summary-item"><div class="num" id="sumTotal">0</div><div class="lbl">Total</div></div>
+</div>
+
+<table id="resultsTable">
+  <thead>
+    <tr>
+      <th>#</th>
+      <th>Query</th>
+      <th>Status</th>
+      <th>Route</th>
+      <th>Airline</th>
+      <th>Aircraft</th>
+      <th>Score</th>
+      <th title="Fidelity | Route | Fleet">Judge</th>
+      <th>Notes</th>
+    </tr>
+  </thead>
+  <tbody id="tableBody"></tbody>
+</table>
+
+<script>
+// ─── Dataset ──────────────────────────────────────────────────────────────────
+let DATASET = []
+
+const AIRCRAFT_MAP = {
+  'B738':'Boeing 737NG','B739':'Boeing 737NG','B73J':'Boeing 737NG','B737':'Boeing 737NG',
+  'B38M':'Boeing 737MAX','B39M':'Boeing 737MAX',
+  'B712':'Boeing 717',
+  'B752':'Boeing 757','B753':'Boeing 757',
+  'B77W':'Boeing 777','B77L':'Boeing 777','B772':'Boeing 777','B773':'Boeing 777',
+  'B78X':'Boeing 787','B788':'Boeing 787','B789':'Boeing 787',
+  'B744':'Boeing 747','B748':'Boeing 747','B741':'Boeing 747',
+  'A320':'Airbus A320','A20N':'Airbus A320',
+  'A321':'Airbus A321','A21N':'Airbus A321',
+  'A319':'Airbus A319','A19N':'Airbus A319',
+  'A333':'Airbus A330','A332':'Airbus A330','A339':'Airbus A330',
+  'A359':'Airbus A350','A35K':'Airbus A350',
+  'A388':'Airbus A380',
+  'E75L':'Embraer E175-E2','E75S':'Embraer E175-E2',
+  'E170':'Embraer E170',
+  'E190':'Embraer E190','E290':'Embraer E190',
+  'E195':'Embraer E195-E2','E295':'Embraer E195-E2',
+  'CRJ9':'Bombardier CRJ','CRJ7':'Bombardier CRJ','CRJ2':'Bombardier CRJ',
+  'DH8D':'DHC Dash 8',
+  'AT76':'ATR 42/72','AT72':'ATR 42/72',
+  'BCS1':'Airbus A220','BCS3':'Airbus A220',
+}
+
+const AIRLINE_CODE_MAP = {
+  'delta air lines':'DL','united airlines':'UA','emirates':'EK',
+  'us-bangla airlines':'BS','gojet airlines':'G7','american airlines':'AA',
+  'envoy air':'MQ','british airways':'BA','air india':'AI',
+  'all nippon airways':'NH','ana':'NH','air france':'AF',
+  'easyjet':'U2','scandinavian airlines':'SK','sas':'SK',
+  'discover airlines':'4Y','turkish airlines':'TK',
+  'klm royal dutch airlines':'KL','klm':'KL','lufthansa':'LH',
+  'indigo':'6E','hong kong express airways':'UO','hk express':'UO',
+  'china eastern airlines':'MU','china eastern':'MU',
+  'air busan':'BX','southwest airlines':'WN','oman air':'WY',
+  'thai vietjet air':'VZ','thai vietjet':'VZ','ryanair':'FR',
+  'aer lingus':'EI','xiamen airlines':'MF','cebu pacific':'5J',
+  'asiana airlines':'OZ','japan airlines':'JL',
+  'hong kong airlines':'HX','alaska airlines':'AS','latam airlines':'LA',
+  'royal jordanian':'RJ','klm cityhopper':'WA',
+}
+
+const CODE_TO_NAME = {
+  'DL':'Delta Air Lines','UA':'United Airlines','EK':'Emirates',
+  'AA':'American Airlines','MQ':'Envoy Air','BA':'British Airways',
+  'AI':'Air India','NH':'All Nippon Airways','AF':'Air France',
+  'U2':'easyJet','SK':'Scandinavian Airlines','TK':'Turkish Airlines',
+  'KL':'KLM','LH':'Lufthansa','6E':'IndiGo','MU':'China Eastern Airlines',
+  'BX':'Air Busan','WN':'Southwest Airlines','WY':'Oman Air',
+  'FR':'Ryanair','EI':'Aer Lingus','5J':'Cebu Pacific','OZ':'Asiana Airlines',
+  'JL':'Japan Airlines','AS':'Alaska Airlines','LA':'LATAM Airlines',
+  'RJ':'Royal Jordanian','CX':'Cathay Pacific','SQ':'Singapore Airlines',
+  'QR':'Qatar Airways','EY':'Etihad Airways','AV':'Avianca',
+  'CM':'Copa Airlines','AM':'Aeromexico','AC':'Air Canada',
+  'JJ':'LATAM Brasil','G3':'Gol','AD':'Azul','AR':'Aerolíneas Argentinas',
+  'IB':'Iberia','VY':'Vueling','TP':'TAP Air Portugal',
+  'LX':'Swiss','OS':'Austrian','VS':'Virgin Atlantic',
+  'BR':'EVA Air','CI':'China Airlines','KE':'Korean Air',
+  'NH':'ANA','MH':'Malaysia Airlines','TG':'Thai Airways',
+  'QF':'Qantas','NZ':'Air New Zealand','ET':'Ethiopian Airlines',
+}
+
+function parseDuration(str) {
+  if (!str) return null
+  const hm = str.trim().match(/^(\d+)h\s*(\d+)m$/)
+  if (hm) return `${hm[1].padStart(2,'0')}:${hm[2].padStart(2,'0')}`
+  const h = str.trim().match(/^(\d+)h$/)
+  if (h) return `${h[1].padStart(2,'0')}:00`
+  const m = str.trim().match(/^(\d+)m$/)
+  if (m) return `00:${m[1].padStart(2,'0')}`
+  return str
+}
+
+function parseCSVRow(line) {
+  // Handle quoted fields
+  const fields = []
+  let cur = '', inQuote = false
+  for (let i = 0; i < line.length; i++) {
+    const c = line[i]
+    if (c === '"') { inQuote = !inQuote }
+    else if (c === ',' && !inQuote) { fields.push(cur.trim()); cur = '' }
+    else cur += c
+  }
+  fields.push(cur.trim())
+  return fields
+}
+
+function buildDatasetFromCSV(text) {
+  const lines = text.trim().split('\n')
+  const header = parseCSVRow(lines[0]).map(h => h.trim())
+  const col = name => header.indexOf(name)
+
+  // Detect format: strict GT (has AirlineCode col) vs dirty (has Airline col)
+  const isStrict = col('AirlineCode') !== -1
+
+  return lines.slice(1).filter(l => l.trim()).map(line => {
+    const f = parseCSVRow(line)
+    const get = name => (f[col(name)] || '').trim()
+
+    let dep, arr, code, aircraft, time, date
+
+    if (isStrict) {
+      dep      = get('Departure')
+      arr      = get('Arrival')
+      code     = get('AirlineCode')
+      aircraft = get('Aircraft')   // already decoded
+      time     = get('Duration')   // already HH:MM
+      date     = get('Date')
+      const fn = get('FlightNumber') || null
+    } else {
+      // dirty format — decode on the fly
+      const route = get('Route')
+      dep      = route.split('→')[0].trim()
+      arr      = get('Airport')
+      const airlineName = get('Airline')
+      code     = AIRLINE_CODE_MAP[airlineName.toLowerCase()] || null
+      aircraft = AIRCRAFT_MAP[get('Aircraft')] || get('Aircraft') || null
+      time     = parseDuration(get('Flight Time'))
+      date     = get('Date')
+    }
+
+    const dateStr = date ? ` on ${date}` : ''
+    const queryMode = document.getElementById('queryMode')?.value || 'no-airline'
+    const airlinePrefix = queryMode === 'with-airline' ? (CODE_TO_NAME[code] || code) + ' ' : ''
+
+    const fn = isStrict ? get('FlightNumber') || null : get('Flight Number').replace(/\D/g, '') || null
+    return { dep, arr, code, fn, aircraft, time, date,
+             query: `${airlinePrefix}from ${dep} to ${arr}${dateStr}` }
+  })
+}
+
+document.getElementById('csvFile').addEventListener('change', function() {
+  const file = this.files[0]
+  if (!file) return
+  const reader = new FileReader()
+  reader.onload = e => {
+    DATASET = buildDatasetFromCSV(e.target.result)
+    setStatus(`Loaded <span>${DATASET.length}</span> entries from ${file.name}`)
+    document.getElementById('runBtn').disabled = false
+  }
+  reader.readAsText(file)
+})
+
+// ─── Prompts (mirrored from useAIFlightParser.js) ─────────────────────────────
+// ── Step 1: REASON ────────────────────────────────────────────────────────────
+function getReasoningPrompt(userQuery) {
+  return `You are reconstructing a flight record from a user's memory. Use your training knowledge about airlines, their fleets, and typical routes. Do NOT search — reason from what you know.
+
+USER QUERY: ${userQuery}
+
+Analyse the user query. It may or may not contain explicit information about the flight details. 
+
+What are we looking for:
+- Departure airport (IATA code)
+- Arrival airport (IATA code)
+- Airline (IATA code)
+- Aircraft type (standard name, e.g. "Boeing 737MAX", "Airbus A320", "Embraer E190")
+
+Perform the next steps:
+
+1. Identify data that cannot be directly extracted from the query.
+2. For missing fields use the folliwing logic: 
+
+ROUTE: If route is missing: abort. We cannot infer a route that isn't mentioned at all. Output null for all fields.
+DATE: What date was provided?
+AIRLINE: Was an airline stated in the query? If yes, preserve it exactly. If no, can you infer one from knowledge of which airlines operate in that region? What is the most likely candidate?
+AIRCRAFT: What aircraft does this airline typically operate on this route? Name the most likely type. If multiple types are possible, name the most common one.
+
+Think through your reasoning in prose, then end with OUTPUT containing short values only — no sentences, no explanations.
+
+OUTPUT:
+  "departureAirportCode": "3-letter IATA code or null",
+  "arrivalAirportCode": "3-letter IATA code or null",
+  "airlineCode": "2-letter IATA code or null",
+  "aircraftName": "standard name e.g. Boeing 777, Airbus A350, or null"
+`
+}
+
+// ── Step 2: JUDGE ─────────────────────────────────────────────────────────────
+function getJudgePrompt(userQuery, reasoningOutput) {
+  return `You are a flight research assistant. Extract key claims from the reasoning below, then look them up to verify.
+
+USER QUERY:
+${userQuery}
+
+AI REASONING:
+${reasoningOutput}
+
+STEP 1 — Extract the claims:
+From the reasoning above, identify: airline (IATA code), departure airport, arrival airport, aircraft type.
+
+STEP 2 — Look up each fact using web search:
+- Search "[airline name] routes [departure] [arrival]" to confirm the airline operates this route
+- Search "[airline name] fleet" to confirm this aircraft type is in the airline's fleet
+
+STEP 3 — Check parse fidelity (no search needed):
+Did the reasoning preserve any data explicitly stated in the user query (airports, airline, dates)?
+
+Output exactly this format:
+FIDELITY: [PASS/FAIL] — [reason]
+ROUTE: [PASS/FAIL] — [what search found]
+FLEET: [PASS/FAIL] — [what search found]`
+}
+
+// ── Step 3: EXTRACT ───────────────────────────────────────────────────────────
+function getExtractionPrompt(query, reasoning, judgeOutput) {
+  return `Extract structured flight data from the reasoning and judge verdicts below.
+
+USER QUERY:
+${query}
+
+REASONING:
+${reasoning}
+
+JUDGE VERDICTS:
+${judgeOutput}
+
+EXTRACTION RULES:
+1. Use reasoning as primary source for all fields
+2. If FLEET: FAIL → set aircraftName to null
+3. If ROUTE: FAIL → set airlineCode, departureAirportCode, arrivalAirportCode to null
+4. If FIDELITY: FAIL → override with values explicitly stated in the user query
+5. Flight numbers: digits only (strip all letters — "WN548" → "548", "UA 1234" → "1234")
+6. Airport codes: 3-letter IATA only, never city codes (JFK not NYC)
+7. Dates: DD-MM-YYYY format
+8. Duration: HH:MM format
+9. Aircraft: normalize to standard names using mapping below — strip variant suffixes
+   ("Boeing 737 MAX 8" → "Boeing 737MAX", "Airbus A350-900ULR" → "Airbus A350", "Boeing 767-300ER" → "Boeing 767")
+
+AIRCRAFT NORMALIZATION:
+Boeing 737:  B738/B739/B73J/B737/Boeing 737-800/Boeing 737-900 → Boeing 737NG
+             B38M/B39M/Boeing 737 MAX 8/Boeing 737 MAX 9/Boeing 737MAX 8 → Boeing 737MAX
+Boeing:      B712 → Boeing 717
+             B752/B753/Boeing 757-200 → Boeing 757
+             B77W/B77L/B772/B773/Boeing 777-200/Boeing 777-300/Boeing 777-300ER → Boeing 777
+             B78X/B788/B789/Boeing 787-8/Boeing 787-9/Boeing 787-10 → Boeing 787
+             B744/B748/Boeing 747-400/Boeing 747-8 → Boeing 747
+Airbus A320: A320/A20N/Airbus A320-200 → Airbus A320
+             A321/A21N/Airbus A321-200/Airbus A321neo → Airbus A321
+             A319/A19N/Airbus A319-100 → Airbus A319
+             BCS1/BCS3/Airbus A220-100/Airbus A220-300 → Airbus A220
+Airbus Wide: A333/A332/A339/A338/Airbus A330-200/Airbus A330-300/Airbus A330-900 → Airbus A330
+             A342/A343/A345/Airbus A340-300/Airbus A340-600 → Airbus A340
+             A359/A35K/Airbus A350-900/Airbus A350-900ULR/Airbus A350-1000 → Airbus A350
+             A388/Airbus A380-800 → Airbus A380
+Regional:    E75L/E75S → Embraer E175
+             E170 → Embraer E170
+             E190/E290/Embraer E190-E2 → Embraer E190
+             E195/E295/Embraer E195-E2 → Embraer E195
+             CRJ9/CRJ7/CRJ2 → Bombardier CRJ
+             DH8D → Bombardier Q400
+             AT76/AT72 → ATR 72
+
+OUTPUT: JSON object with exactly these fields (use null for missing/rejected):
+{
+  "airlineCode": "2-letter IATA or null",
+  "departureAirportCode": "3-letter IATA or null",
+  "arrivalAirportCode": "3-letter IATA or null",
+  "flightDate": "DD-MM-YYYY or null",
+  "aircraftName": "normalized full name or null"
+}`
+}
+
+// ─── API ───────────────────────────────────────────────────────────────────────
+const API_URL = 'https://gen.pollinations.ai/v1/chat/completions'
+const MODEL_SEARCH = 'gemini-search'   // grounding enabled, incompatible with json mode
+const MODEL_JSON = 'gemini-fast'       // no grounding, supports json mode
+
+const CALL_TIMEOUT_MS = 10000
+
+function fetchWithTimeout(url, options) {
+  const timer = new AbortController()
+  const id = setTimeout(() => timer.abort(), CALL_TIMEOUT_MS)
+  const combined = AbortSignal.any
+    ? AbortSignal.any([currentSignal, timer.signal])
+    : timer.signal  // fallback: timeout only
+  return fetch(url, { ...options, signal: combined }).finally(() => clearTimeout(id))
+}
+
+async function callLLM(apiKey, messages, jsonMode = false, modelOverride = null) {
+  const model = modelOverride || (jsonMode ? MODEL_JSON : MODEL_SEARCH)
+  const body = {
+    model,
+    messages,
+    temperature: 0,
+    ...(jsonMode ? { response_format: { type: 'json_object' } } : {})
+  }
+  const res = await fetchWithTimeout(API_URL, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${apiKey}` },
+    body: JSON.stringify(body)
+  })
+  if (!res.ok) { const txt = await res.text(); throw new Error(`API ${res.status}: ${txt.slice(0, 200)}`) }
+  const data = await res.json()
+  return data.choices[0].message.content
+}
+
+async function callLLMFull(apiKey, messages, modelOverride) {
+  const model = modelOverride || MODEL_SEARCH
+  const body = { model, messages, temperature: 0 }
+  const res = await fetchWithTimeout(API_URL, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${apiKey}` },
+    body: JSON.stringify(body)
+  })
+  if (!res.ok) { const txt = await res.text(); throw new Error(`API ${res.status}: ${txt.slice(0, 200)}`) }
+  const data = await res.json()
+  const choice = data.choices[0]
+  const grounding = choice.groundingMetadata || null
+  const queries = grounding?.webSearchQueries || []
+  return { content: choice.message.content, queries, grounding, rawChoice: choice }
+}
+
+// ─── Comparison ───────────────────────────────────────────────────────────────
+function timeToMinutes(t) {
+  if (!t) return null
+  const m = t.match(/^(\d+):(\d+)$/)
+  if (!m) return null
+  return parseInt(m[1]) * 60 + parseInt(m[2])
+}
+
+function compareResults(expected, extracted) {
+  const fields = {}
+  let score = 0
+  let total = 0
+
+  // Route: dep airport
+  const depGot = extracted.departureAirportCode
+  fields.dep = { expected: expected.dep, got: depGot, pass: depGot === expected.dep }
+  total++; if (fields.dep.pass) score++
+
+  // Route: arr airport
+  const arrGot = extracted.arrivalAirportCode
+  fields.arr = { expected: expected.arr, got: arrGot, pass: arrGot === expected.arr }
+  total++; if (fields.arr.pass) score++
+
+  // Airline code
+  const airlineGot = extracted.airlineCode
+  fields.airline = { expected: expected.code, got: airlineGot, pass: airlineGot === expected.code }
+  total++; if (fields.airline.pass) score++
+
+  // Aircraft
+  const acGot = extracted.aircraftName
+  fields.aircraft = { expected: expected.aircraft, got: acGot, pass: acGot === expected.aircraft }
+  total++; if (fields.aircraft.pass) score++
+
+  return { fields, score, total, pct: Math.round((score / total) * 100) }
+}
+
+// ─── State ────────────────────────────────────────────────────────────────────
+let results = []
+let running = false
+let currentSignal = null
+let abortController = null
+
+// ─── UI helpers ───────────────────────────────────────────────────────────────
+function initTable(entries) {
+  const tbody = document.getElementById('tableBody')
+  tbody.innerHTML = ''
+  results = entries.map((e, i) => ({ entry: e, index: i, status: 'pending', extracted: null, comparison: null, error: null, trace: null }))
+  results.forEach(r => {
+    const tr = document.createElement('tr')
+    tr.id = `row-${r.index}`
+    tr.className = 'data-row'
+    tr.innerHTML = `
+      <td><span class="toggle-btn" onclick="toggleTrace(${r.index})">▶ ${r.index + 1}</span></td>
+      <td style="max-width:220px;word-break:break-word;font-size:11px">${r.entry.query}</td>
+      <td class="pending">—</td>
+      <td class="pending">—</td><td class="pending">—</td><td class="pending">—</td>
+      <td class="pending">—</td><td class="pending">—</td>
+      <td class="pending">—</td><td class="pending">—</td><td></td>`
+    tbody.appendChild(tr)
+
+    const traceRow = document.createElement('tr')
+    traceRow.id = `trace-${r.index}`
+    traceRow.className = 'trace-row'
+    traceRow.innerHTML = `<td colspan="11"><div class="trace-wrap" id="trace-content-${r.index}"><span style="color:#555">No trace yet.</span></div></td>`
+    tbody.appendChild(traceRow)
+  })
+}
+
+function updateRow(r) {
+  const tr = document.getElementById(`row-${r.index}`)
+  if (!tr) return
+  tr.className = r.status === 'running' ? 'row-running' : ''
+
+  const c = r.comparison
+  const statusCell = r.status === 'running' ? '<span class="running">⏳ running</span>'
+    : r.status === 'error' ? `<span class="fail">✗ error</span>`
+    : r.status === 'pending' ? '<span class="pending">—</span>'
+    : c.pct >= 80 ? `<span class="pass">✓ ${c.pct}%</span>`
+    : `<span class="fail">✗ ${c.pct}%</span>`
+
+  function fieldCell(f) {
+    if (!f) return '<td class="pending">—</td>'
+    const cls = f.pass ? 'pass' : 'fail'
+    const got = f.got ?? 'null'
+    return `<td><span class="${cls}">${got}</span>${!f.pass ? `<br><span class="expected">exp: ${f.expected}</span>` : ''}</td>`
+  }
+
+  const cells = c ? [
+    fieldCell(c.fields.dep) + fieldCell(c.fields.arr).replace('<td>', '<td>').replace('</td>', ' <span style="color:#555">→</span></td>'),
+    `<td>${fieldCell(c.fields.airline).replace(/<\/?td>/g,'')}</td>`,
+    `<td>${fieldCell(c.fields.aircraft).replace(/<\/?td>/g,'')}</td>`,
+    `<td class="score-cell ${c.pct>=80?'pass':'fail'}">${c.score}/${c.total}</td>`,
+  ] : ['<td>—</td>','<td>—</td>','<td>—</td>','<td>—</td>','<td>—</td>','<td>—</td>']
+
+  const noteCell = r.error
+    ? `<td class="error-text">${r.error}</td>`
+    : (r.validationFailed?.length ? `<td class="fail" style="font-size:11px">nulled: ${r.validationFailed.join(', ')}</td>` : '<td></td>')
+
+  // Route cell combines dep+arr
+  const routeCell = c
+    ? `<td><span class="${c.fields.dep.pass?'pass':'fail'}">${c.fields.dep.got??'null'}</span> → <span class="${c.fields.arr.pass?'pass':'fail'}">${c.fields.arr.got??'null'}</span>${(!c.fields.dep.pass||!c.fields.arr.pass)?`<br><span class="expected">exp: ${c.fields.dep.expected} → ${c.fields.arr.expected}</span>`:''}</td>`
+    : '<td class="pending">—</td>'
+
+  tr.cells[2].outerHTML = `<td>${statusCell}</td>`
+  tr.cells[3].outerHTML = routeCell
+  tr.cells[4].outerHTML = c ? `<td><span class="${c.fields.airline.pass?'pass':'fail'}">${c.fields.airline.got??'null'}</span>${!c.fields.airline.pass?`<br><span class="expected">exp: ${c.fields.airline.expected}</span>`:''}</td>` : '<td class="pending">—</td>'
+  tr.cells[5].outerHTML = c ? `<td><span class="${c.fields.aircraft.pass?'pass':'fail'}">${c.fields.aircraft.got??'null'}</span>${!c.fields.aircraft.pass?`<br><span class="expected">exp: ${c.fields.aircraft.expected}</span>`:''}</td>` : '<td class="pending">—</td>'
+  tr.cells[6].outerHTML = c ? `<td class="score-cell ${c.pct>=80?'pass':'fail'}">${c.score}/${c.total}</td>` : '<td class="pending">—</td>'
+
+  const verdicts = r.extracted?.validation?.verdicts
+  function verdictPill(label, val) {
+    if (!val) return `<span style="color:#555;font-size:10px">${label}?</span>`
+    const cls = val === 'PASS' ? 'pass' : 'fail'
+    return `<span class="${cls}" style="font-size:10px">${label}:${val === 'PASS' ? '✓' : '✗'}</span>`
+  }
+  const judgeCell = verdicts
+    ? `<td style="font-size:10px;line-height:1.8">` +
+      verdictPill('FID', verdicts.fidelity) + '<br>' +
+      verdictPill('RTE', verdicts.route) + '<br>' +
+      verdictPill('FLT', verdicts.fleet) +
+      `</td>`
+    : '<td class="pending">—</td>'
+  tr.cells[7].outerHTML = judgeCell
+  tr.cells[8].outerHTML = noteCell
+}
+
+function updateSummary() {
+  const done = results.filter(r => r.status === 'done' || r.status === 'error')
+  const passed = results.filter(r => r.comparison?.pct >= 80)
+  const failed = results.filter(r => r.status === 'done' && r.comparison?.pct < 80)
+  const errors = results.filter(r => r.status === 'error')
+  const scores = results.filter(r => r.comparison).map(r => r.comparison.pct)
+  const avg = scores.length ? Math.round(scores.reduce((a,b) => a+b, 0) / scores.length) : 0
+
+  document.getElementById('sumPass').textContent = passed.length
+  document.getElementById('sumFail').textContent = failed.length + errors.length
+  document.getElementById('sumScore').textContent = scores.length ? avg + '%' : '-'
+  document.getElementById('sumTotal').textContent = done.length
+  document.getElementById('summary').style.display = 'flex'
+}
+
+function toggleTrace(index) {
+  const traceRow = document.getElementById(`trace-${index}`)
+  const btn = document.querySelector(`#row-${index} .toggle-btn`)
+  if (!traceRow) return
+  const open = traceRow.classList.toggle('open')
+  if (btn) btn.textContent = (open ? '▼ ' : '▶ ') + (index + 1)
+}
+
+function updateTraceRow(r) {
+  const el = document.getElementById(`trace-content-${r.index}`)
+  if (!el || !r.trace) return
+  const t = r.trace
+  el.innerHTML = `
+    <div class="trace-block">
+      <div class="trace-label">Step 1 — Reason</div>
+      <pre>${escHtml(t.reasoning ?? '—')}</pre>
+    </div>
+    <div class="trace-block">
+      <div class="trace-label">Step 2 — Judge</div>
+      ${t.judgeQueries?.length
+        ? `<div style="margin-bottom:4px">${t.judgeQueries.map(q => `<span style="background:#1a2a1a;color:#4ade80;font-size:10px;padding:1px 5px;margin-right:4px;border-radius:2px">🔍 ${escHtml(q)}</span>`).join('')}</div>` +
+          (t.judgeGrounding?.groundingChunks?.length ? `<div style="margin-bottom:6px">${[...new Set(t.judgeGrounding.groundingChunks.map(c => c.web?.domain).filter(Boolean))].map(d => `<span style="color:#6b7280;font-size:10px;margin-right:6px">↳ ${escHtml(d)}</span>`).join('')}</div>` : '')
+        : '<div style="color:#6b3a3a;font-size:10px;margin-bottom:4px">⚠ no search queries returned</div>'}
+      <pre>${escHtml(t.judge ?? '—')}</pre>
+      ${t.judgeRaw ? `<details style="margin-top:6px"><summary style="color:#555;font-size:10px;cursor:pointer">raw API response</summary><pre style="color:#444;font-size:10px;max-height:200px;overflow:auto">${escHtml(JSON.stringify(t.judgeRaw, null, 2))}</pre></details>` : ''}
+    </div>
+    <div class="trace-block">
+      <div class="trace-label">Step 3 — Extract</div>
+      <pre>${escHtml(t.extract ?? '—')}</pre>
+    </div>`
+}
+
+function escHtml(s) {
+  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
+}
+
+function parseJudgeVerdicts(judgeText) {
+  if (!judgeText) return null
+  const parse = (key) => {
+    const m = judgeText.match(new RegExp(key + '\\s*:\\s*(PASS|FAIL)', 'i'))
+    return m ? m[1].toUpperCase() : null
+  }
+  return { fidelity: parse('FIDELITY'), route: parse('ROUTE'), fleet: parse('FLEET') }
+}
+
+// ─── Main eval runner ─────────────────────────────────────────────────────────
+async function runEval() {
+  const apiKey = document.getElementById('apiKey').value.trim()
+  if (!apiKey) { alert('Enter API key'); return }
+
+  const mode = document.getElementById('runMode').value
+  let entries
+  if (mode === 'first5') entries = DATASET.slice(0, 5)
+  else if (mode === 'first10') entries = DATASET.slice(0, 10)
+  else if (mode === 'single') {
+    const idx = parseInt(document.getElementById('singleIndex').value)
+    entries = [DATASET[idx]]
+  } else entries = DATASET
+
+  initTable(entries)
+  document.getElementById('summary').style.display = 'none'
+  abortController = new AbortController()
+  currentSignal = abortController.signal
+  running = true
+  document.getElementById('runBtn').disabled = true
+  document.getElementById('stopBtn').disabled = false
+
+  let completed = 0
+  for (const r of results) {
+    if (!running) break
+
+    r.status = 'running'
+    updateRow(r)
+    setStatus(`Running ${r.index + 1}/${results.length}: ${r.entry.query.substring(0, 60)}...`)
+
+    const MAX_ATTEMPTS = 3
+    let lastError = null
+
+    for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
+      try {
+        if (attempt > 1) {
+          r.error = `retry ${attempt}/${MAX_ATTEMPTS}…`
+          updateRow(r)
+          await new Promise(res => setTimeout(res, 1500 * attempt))
+        }
+
+        // Step 1: Reason (gemini-fast, parametric knowledge, no grounding)
+        const reasonContent = await callLLM(apiKey, [
+          { role: 'user', content: getReasoningPrompt(r.entry.query) }
+        ], false, MODEL_JSON)
+
+        // Step 2: Judge (gemini-search, grounding enabled, free text)
+        const { content: judgeContent, queries: judgeSearchQueries, grounding: judgeGrounding, rawChoice: judgeRaw } = await callLLMFull(apiKey, [
+          { role: 'user', content: getJudgePrompt(r.entry.query, reasonContent) }
+        ])
+
+        // Step 3: Extract (gemini-fast, structured JSON)
+        const extractPrompt = getExtractionPrompt(r.entry.query, reasonContent, judgeContent)
+        const extractContent = await callLLM(apiKey, [
+          { role: 'user', content: extractPrompt }
+        ], true)
+
+        let extracted
+        try { extracted = JSON.parse(extractContent) }
+        catch { throw new Error('Extract JSON parse failed') }
+
+        // Store full trace
+        r.trace = { reasoning: reasonContent, judge: judgeContent, judgeQueries: judgeSearchQueries, judgeGrounding, judgeRaw, extract: extractContent }
+
+        const validation = { reasoning: judgeContent, verdicts: parseJudgeVerdicts(judgeContent) }
+
+        r.extracted = { ...extracted, validation }
+        r.validationFailed = []
+        r.comparison = compareResults(r.entry, extracted)
+        r.status = 'done'
+        r.error = null
+        lastError = null
+        break
+
+      } catch (err) {
+        if (err.name === 'AbortError' && !running) { r.status = 'pending'; break }
+        lastError = err
+        if (attempt === MAX_ATTEMPTS) {
+          r.status = 'error'
+          r.error = `(${MAX_ATTEMPTS} attempts) ${err.message}`
+        }
+      }
+    }
+
+    if (!running) break
+
+    completed++
+    updateRow(r)
+    updateTraceRow(r)
+    updateSummary()
+    document.getElementById('progressFill').style.width = `${(completed / results.length) * 100}%`
+
+    // Small delay to avoid rate limiting
+    if (running && completed < results.length) await new Promise(res => setTimeout(res, 500))
+  }
+
+  running = false
+  document.getElementById('runBtn').disabled = false
+  document.getElementById('stopBtn').disabled = true
+  setStatus(`Done. ${completed} entries processed.`)
+}
+
+function stopEval() {
+  running = false
+  abortController?.abort()
+  document.getElementById('runBtn').disabled = false
+  document.getElementById('stopBtn').disabled = true
+  setStatus('Stopped.')
+}
+
+function setStatus(msg) {
+  document.getElementById('statusBar').innerHTML = msg.replace(/(\d+\/\d+)/, '<span>$1</span>')
+}
+
+function exportResults() {
+  const data = results.map(r => ({
+    query: r.entry.query,
+    status: r.status,
+    trace: r.trace,
+    expected: r.entry,
+    extracted: r.extracted,
+    comparison: r.comparison,
+    error: r.error
+  }))
+  const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' })
+  const a = document.createElement('a')
+  a.href = URL.createObjectURL(blob)
+  a.download = `eval-results-${new Date().toISOString().slice(0,10)}.json`
+  a.click()
+}
+
+// Init
+document.getElementById('runMode').addEventListener('change', function() {
+  document.getElementById('singleIndexWrap').style.display = this.value === 'single' ? 'block' : 'none'
+})
+
+// Load API key from localStorage if present
+const savedKey = localStorage.getItem('pollinations_api_key')
+if (savedKey) document.getElementById('apiKey').value = savedKey
+document.getElementById('apiKey').addEventListener('change', function() {
+  localStorage.setItem('pollinations_api_key', this.value)
+})
+</script>
+</body>
+</html>
